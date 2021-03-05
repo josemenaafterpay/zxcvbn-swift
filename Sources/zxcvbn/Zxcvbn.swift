@@ -25,8 +25,8 @@ public enum Zxcvbn {
     }
 
     public struct Result {
-        let entropy: Double
-        let matches: [Match]
+        public let entropy: Double
+        public let matches: [Match]
     }
 
     public static func estimate(_ password: String, userInfo: [String] = []) -> Result {
