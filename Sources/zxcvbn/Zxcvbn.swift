@@ -26,6 +26,7 @@ public enum Zxcvbn {
 
     public struct Result {
         public let entropy: Double
+        public let score: Int
         public let matches: [Match]
     }
 
@@ -38,12 +39,16 @@ public enum Zxcvbn {
 
         guard !userInfo.isEmpty else {
             let entropy = ZxcvbnMatch(password, nil, &info)
-            return Result(entropy: entropy, matches: convertInfo(info?.pointee))
+            let crackTime = entropyToCrackTime(Float(entropy))
+            let score = crackTimeToScore(seconds: crackTime)
+            return Result(entropy: entropy, score: score, matches: convertInfo(info?.pointee))
         }
 
         return withArrayOfCStrings(userInfo) { userInfo in
             let entropy = ZxcvbnMatch(password, userInfo, &info)
-            return Result(entropy: entropy, matches: convertInfo(info?.pointee))
+            let crackTime = entropyToCrackTime(Float(entropy))
+            let score = crackTimeToScore(seconds: crackTime)
+            return Result(entropy: entropy, score: score, matches: convertInfo(info?.pointee))
         }
     }
 }
@@ -98,4 +103,48 @@ private func scan<S : Sequence, U>(_ seq: S, _ initial: U, _ combine: (U, S.Iter
         result.append(runningResult)
     }
     return result
+}
+
+// Code copied from dropbox zxcvbn-ios
+private func entropyToCrackTime(_ entropy: Float) -> Float {
+
+    /*
+     threat model -- stolen hash catastrophe scenario
+     assumes:
+     * passwords are stored as salted hashes, different random salt per user.
+        (making rainbow attacks infeasable.)
+     * hashes and salts were stolen. attacker is guessing passwords at max rate.
+     * attacker has several CPUs at their disposal.
+     * for a hash function like bcrypt/scrypt/PBKDF2, 10ms per guess is a safe lower bound.
+     * (usually a guess would take longer -- this assumes fast hardware and a small work factor.)
+     * adjust for your site accordingly if you use another hash function, possibly by
+     * several orders of magnitude!
+     */
+
+    let singleGuess: Float = 0.010
+    let numAttackers: Float = 100
+
+    let secondsPerGuess =  singleGuess / numAttackers
+
+    return 0.5 * pow(2, entropy) * secondsPerGuess
+}
+
+private func crackTimeToScore(seconds: Float) -> Int {
+    if seconds < pow(10, 2) {
+        return 0
+    }
+
+    if seconds < pow(10, 4) {
+        return 1
+    }
+
+    if seconds < pow(10, 6) {
+        return 2
+    }
+
+    if seconds < pow(10, 8) {
+        return 3;
+    }
+
+    return 4;
 }
